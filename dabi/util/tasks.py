@@ -1,7 +1,7 @@
 import os
 from typing import Dict, List
 
-from dabi.util.util import upload_local_file_to_oss_direct, sync_result_to_dabi, copy_local_file
+from dabi.util.util import upload_local_file_to_oss_direct, sync_result_to_dabi, copy_local_file, upload_sample_image
 from mikazuki.log import log
 from mikazuki.tasks import tm, TaskStatus
 from enum import Enum
@@ -44,11 +44,10 @@ class DabiTaskManager:
                         # 上传模型文件时判断任务是否处于FINISHED状态，如果期间任务被中止，就不在上传
                         if self.tasks[task_id].status == TaskStatus.FINISHED:
                             oss_file_path = upload_local_file_to_oss_direct(env, item, os.path.join(local_model_path, item))
-                            if oss_file_path:
-                                dabi_task.models.append({
-                                    "name": item,
-                                    "oss_path": oss_file_path
-                                })
+                            dabi_task.models.append({
+                                "name": item,
+                                "oss_path": oss_file_path
+                            })
                             try:
                                 copy_local_file(item, local_model_path, item, "/mnt/train_loras")
                             except  Exception as e:
@@ -67,12 +66,11 @@ class DabiTaskManager:
                     for item in sample_images:
                         # 上传模型文件时判断任务是否处于FINISHED状态，如果期间任务被中止，就不在上传
                         if self.tasks[task_id].status == TaskStatus.FINISHED:
-                            oss_file_path = upload_local_file_to_oss_direct(env, item, os.path.join(local_sample_image_path, item))
-                            if oss_file_path:
-                                dabi_task.sample_images.append({
-                                    "name": item,
-                                    "oss_path": oss_file_path
-                                })
+                            oss_file_path = upload_sample_image(env, item, os.path.join(local_sample_image_path, item))
+                            dabi_task.sample_images.append({
+                                "name": item,
+                                "oss_path": oss_file_path
+                            })
                         else:
                             log.info(f"Task {task_id} may be terminated, skip upload sample image: {item}")
             if output_model_size_match_epoch:

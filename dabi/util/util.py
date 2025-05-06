@@ -71,6 +71,29 @@ def upload_local_file_to_oss_direct(env, oss_file_name, local_file):
         log.error(f"Upload to oss failed, Error fetching : {e}")
         return None
 
+def upload_sample_image(env, local_file_name, local_file_dir):
+    config = get_dabi_config(env)
+    url = config['host'] + '/lora/train/uploadSampleImage'
+    try:
+        with open(local_file_dir, 'rb') as f:
+            files = {'file': (local_file_name, f.read(), 'image/png')}
+            # 只要服务通的就能获取到地址，不会校验文件是否存在
+            response = requests.post(url, files=files, timeout=30)
+            response.raise_for_status()  # 如果请求失败，抛出异常
+            json = response.json()
+            if "data" not in json or json['data'] is None:
+                log.error(f"Upload to oss failed, local file: {local_file_name}")
+                return None
+            res_data = json['data']
+            if "path" not in res_data or res_data['path'] is None:
+                log.error(f"Upload to oss failed, local file: {local_file_name}")
+                return None
+            oss_file_path = res_data['path']
+            log.info(f"Upload to oss success, local file: {local_file_name}, oss file path: {oss_file_path}")
+            return oss_file_path
+    except Exception as ex:
+        log.error(f"Upload to oss failed, local file: {local_file_name}, oss file path: {oss_file_path}")
+
 def sync_result_to_dabi(env, data, code):
     config = get_dabi_config(env)
     url = config['host'] + '/lora/train/callbackAfterTrainDone'
