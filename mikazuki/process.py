@@ -40,7 +40,6 @@ def run_train(toml_path: str,
 
     if not (task := tm.create_task(args, customize_env)):
         return APIResponse(status="error", message="Failed to create task / 无法创建训练任务")
-
     def _run():
         try:
             task.execute()
@@ -49,6 +48,60 @@ def run_train(toml_path: str,
                 log.error(f"Training failed / 训练失败")
             else:
                 log.info(f"Training finished / 训练完成")
+        except Exception as e:
+            log.error(f"An error occurred when training / 训练出现致命错误: {e}")
+
+    coro = asyncio.to_thread(_run)
+    asyncio.create_task(coro)
+
+    return APIResponse(status="success", message=f"Training started / 训练开始 ID: {task.task_id}")
+
+def dabi_run_train(task_id: str,
+              toml_path: str,
+              trainer_file: str = "./scripts/train_network.py",
+              gpu_ids: Optional[list] = None,
+              cpu_threads: Optional[int] = 2):
+    log.info(f"Training started with config file / 训练开始，使用配置文件: {toml_path}")
+    args = [
+        sys.executable, "-m", "accelerate.commands.launch",  # use -m to avoid python script executable error
+        "--num_cpu_threads_per_process", str(cpu_threads),  # cpu threads
+        "--quiet",  # silence accelerate error message
+        trainer_file,
+        "--config_file", toml_path,
+    ]
+
+    customize_env = os.environ.copy()
+    customize_env["ACCELERATE_DISABLE_RICH"] = "1"
+    customize_env["PYTHONUNBUFFERED"] = "1"
+    customize_env["PYTHONWARNINGS"] = "ignore::FutureWarning,ignore::UserWarning"
+
+    if gpu_ids:
+        customize_env["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_ids)
+        log.info(f"Using GPU(s) / 使用 GPU: {gpu_ids}")
+
+        if len(gpu_ids) > 1:
+            args[3:3] = ["--multi_gpu", "--num_processes", str(len(gpu_ids))]
+            if sys.platform == "win32":
+                customize_env["USE_LIBUV"] = "0"
+                args[3:3] = ["--rdzv_backend", "c10d"]
+
+    if not (task := tm.dabi_create_task(task_id, args, customize_env)):
+        return APIResponse(status="error", message="Failed to create task / 无法创建训练任务")
+    from dabi.util import tasks
+    def _run():
+        try:
+            task.execute()
+            tasks.dabi_task_manager.set_task_status(task_id, task.status)
+            result = task.communicate()
+            tasks.dabi_task_manager.set_task_status(task_id, task.status)
+            from dabi.util.tasks import DabiTaskStatus
+            if result.returncode != 0:
+                log.error(f"Training failed / 训练失败")
+                tasks.dabi_task_manager.set_task_status(task_id, DabiTaskStatus.TRAIN_FAILED)
+                tasks.dabi_task_manager.sync_result_to_dabi(task_id, 1)
+            else:
+                log.info(f"Training finished / 训练完成")
+                tasks.dabi_task_manager.upload_model_to_oss(task.task_id)
         except Exception as e:
             log.error(f"An error occurred when training / 训练出现致命错误: {e}")
 

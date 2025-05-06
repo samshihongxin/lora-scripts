@@ -97,6 +97,19 @@ class TaskManager:
         log.info(f"Task {task_id} created")
         return task
 
+    def dabi_create_task(self, task_id :str, command: List[str], environ):
+        running_tasks = [t for _, t in self.tasks.items() if t.status == TaskStatus.RUNNING]
+        if len(running_tasks) >= self.max_concurrent:
+            log.error(
+                f"Unable to create a task because there are already {len(running_tasks)} tasks running, reaching the maximum concurrent limit. / 无法创建任务，因为已经有 {len(running_tasks)} 个任务正在运行，已达到最大并发限制。")
+            return None
+        # task_id = str(uuid.uuid4())
+        task = Task(task_id=task_id, command=command, environ=environ)
+        self.tasks[task_id] = task
+        # task.execute() # breaking change
+        log.info(f"Task {task_id} created")
+        return task
+
     def add_task(self, task_id: str, task: Task):
         self.tasks[task_id] = task
 

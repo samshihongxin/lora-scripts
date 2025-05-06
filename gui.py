@@ -77,11 +77,11 @@ def launch():
         args.host = "0.0.0.0"
         args.tensorboard_host = "0.0.0.0"
 
-    if not args.disable_tageditor:
-        run_tag_editor()
-
-    if not args.disable_tensorboard:
-        run_tensorboard()
+    # if not args.disable_tageditor:
+    #     run_tag_editor()
+    #
+    # if not args.disable_tensorboard:
+    #     run_tensorboard()
 
     import uvicorn
     log.info(f"Server started at http://{args.host}:{args.port}")

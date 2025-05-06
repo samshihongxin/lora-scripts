@@ -77,7 +77,8 @@ async def add_cache_control_header(request, call_next):
 
 app.include_router(api_router, prefix="/api")
 # app.include_router(ipc_router, prefix="/ipc")
-
+from dabi.api import router as dabi_api_router
+app.include_router(dabi_api_router, prefix="/dabi/api")
 
 @app.get("/")
 async def index():
