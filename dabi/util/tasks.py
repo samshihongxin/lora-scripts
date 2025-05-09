@@ -5,6 +5,7 @@ from dabi.util.util import upload_local_file_to_oss_direct, sync_result_to_dabi,
 from mikazuki.log import log
 from mikazuki.tasks import tm, TaskStatus
 from enum import Enum
+from datetime import datetime
 
 class DabiTaskStatus(Enum):
     TRAIN_FAILED = 4
@@ -40,6 +41,7 @@ class DabiTaskManager:
                 if max_train_epochs == len(model_files):
                     output_model_size_match_epoch = True
                     model_files.sort()
+                    timestamp = datetime.now().strftime("%Y%m%d")
                     for item in model_files:
                         # 上传模型文件时判断任务是否处于FINISHED状态，如果期间任务被中止，就不在上传
                         if self.tasks[task_id].status == TaskStatus.FINISHED:
@@ -49,7 +51,8 @@ class DabiTaskManager:
                                 "oss_path": oss_file_path
                             })
                             try:
-                                copy_local_file(item, local_model_path, item, "/mnt/train_loras")
+                                target_file_dir = f"/mnt/train_loras/{timestamp}"
+                                copy_local_file(item, local_model_path, item, target_file_dir)
                             except  Exception as e:
                                 log.error(f"Copy model file to /mnt/train_loras failed, Error fetching : {e}")
                         else:

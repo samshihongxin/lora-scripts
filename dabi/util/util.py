@@ -82,11 +82,11 @@ def upload_sample_image(env, local_file_name, local_file_dir):
             response.raise_for_status()  # 如果请求失败，抛出异常
             json = response.json()
             if "data" not in json or json['data'] is None:
-                log.error(f"Upload to oss failed, local file: {local_file_name}")
+                log.error(f"Upload to oss failed, local file: {local_file_name}, result={json}")
                 return None
             res_data = json['data']
             if "path" not in res_data or res_data['path'] is None:
-                log.error(f"Upload to oss failed, local file: {local_file_name}")
+                log.error(f"Upload to oss failed, local file: {local_file_name}, result={json}")
                 return None
             oss_file_path = res_data['path']
             log.info(f"Upload to oss success, local file: {local_file_name}, oss file path: {oss_file_path}")
