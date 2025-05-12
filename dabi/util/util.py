@@ -49,7 +49,7 @@ def upload_oss(env, files, expire_seconds):
         log.error(f"Upload to oss failed, Error fetching : {e}")
         return None
 
-def upload_local_file_to_oss_direct(env, oss_file_name, local_file):
+def upload_local_file_to_oss_direct(env, oss_file_name, local_file, timestamp):
     oss_config = get_oss_config(env)
     oss_dir = oss_config['lora_train_dir']
     access_key_id = oss_config['access_key_id']
@@ -62,8 +62,8 @@ def upload_local_file_to_oss_direct(env, oss_file_name, local_file):
     bucket = oss2.Bucket(auth, endpoint, bucket_name, region=region)
     try:
         with open(local_file, 'rb') as file:
-            oss_file_path = f"{oss_dir}{datetime.now().strftime('%Y%m%d')}/{oss_file_name}"
-            log.info(f"Start uploading to oss success, local file: {local_file}, oss file path: {oss_file_path}")
+            oss_file_path = f"{oss_dir}{timestamp}/{oss_file_name}"
+            log.info(f"Start uploading to oss, local file: {local_file}, oss file path: {oss_file_path}")
             bucket.put_object(oss_file_path, file)
             log.info(f"Upload to oss success, local file: {local_file}, oss file path: {oss_file_path}")
             return oss_file_path

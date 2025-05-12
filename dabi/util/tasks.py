@@ -45,7 +45,7 @@ class DabiTaskManager:
                     for item in model_files:
                         # 上传模型文件时判断任务是否处于FINISHED状态，如果期间任务被中止，就不在上传
                         if self.tasks[task_id].status == TaskStatus.FINISHED:
-                            oss_file_path = upload_local_file_to_oss_direct(env, item, os.path.join(local_model_path, item))
+                            oss_file_path = upload_local_file_to_oss_direct(env, item, os.path.join(local_model_path, item), timestamp)
                             dabi_task.models.append({
                                 "name": item,
                                 "oss_path": oss_file_path
