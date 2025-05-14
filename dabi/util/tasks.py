@@ -51,8 +51,10 @@ class DabiTaskManager:
                                 "oss_path": oss_file_path
                             })
                             try:
-                                target_file_dir = f"/mnt/train_loras/{timestamp}"
+                                target_file_dir = f"/mnt/train_loras/{env}/{timestamp}"
                                 copy_local_file(item, local_model_path, item, target_file_dir)
+                                # 删除本地模型
+                                os.remove(os.path.join(local_model_path, item))
                             except  Exception as e:
                                 log.error(f"Copy model file to /mnt/train_loras failed, Error fetching : {e}")
                         else:
@@ -74,6 +76,11 @@ class DabiTaskManager:
                                 "name": item,
                                 "oss_path": oss_file_path
                             })
+                            try:
+                                # 删除本地样图
+                                os.remove(os.path.join(local_sample_image_path, item))
+                            except  Exception as e:
+                                log.error(f"Remove local sample file failed, Error fetching : {e}")
                         else:
                             log.info(f"Task {task_id} may be terminated, skip upload sample image: {item}")
             if output_model_size_match_epoch:
