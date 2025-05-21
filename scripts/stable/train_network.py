@@ -135,6 +135,11 @@ class NetworkTrainer:
         train_util.sample_images(accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet)
 
     def train(self, args):
+        from dabi.util.util import upload_model_and_sample_file, sync_process_info_to_dabi
+        from dabi.wb.client import SyncWebSocketClient
+        wb_client = SyncWebSocketClient(args.dabi_ws_host)
+        wb_client.start()
+
         session_id = random.randint(0, 2**32)
         training_started_at = time.time()
         train_util.verify_training_args(args)
@@ -379,6 +384,9 @@ class NetworkTrainer:
             persistent_workers=args.persistent_data_loader_workers,
         )
 
+        steps_per_epoch = math.ceil(
+            len(train_dataloader) / accelerator.num_processes / args.gradient_accumulation_steps
+        )
         # 学習ステップ数を計算する
         if args.max_train_epochs is not None:
             args.max_train_steps = args.max_train_epochs * math.ceil(
@@ -887,6 +895,7 @@ class NetworkTrainer:
                 initial_step -= len(train_dataloader)
             global_step = initial_step
 
+        ws_message = None
         for epoch in range(epoch_to_start, num_train_epochs):
             accelerator.print(f"\nepoch {epoch+1}/{num_train_epochs}")
             current_epoch.value = epoch + 1
@@ -1058,6 +1067,20 @@ class NetworkTrainer:
                     )
                     accelerator.log(logs, step=global_step)
 
+                #每轮的最后一步需要等待上传完模型&样图到oss，再同步
+                progress_bar_elapsed = progress_bar.format_dict['elapsed']
+                # progress_bar_remaining = progress_bar.format_dict['remaining']
+                ws_message = {"taskId": args.dabi_task_id,
+                              "totalSteps": args.max_train_steps,
+                              "currentStep": current_step.value + 1,
+                              "totalEpochs": num_train_epochs,
+                              "currentEpoch": epoch + 1,
+                              "currentStepOfEpoch": step + 1,
+                              "avrLoss": avr_loss,
+                              "progressBarElapsed": progress_bar_elapsed}
+                if step + 1 < args.max_train_steps / num_train_epochs:
+                    wb_client.send_message(ws_message)
+
                 if global_step >= args.max_train_steps:
                     break
 
@@ -1084,6 +1107,31 @@ class NetworkTrainer:
 
             self.sample_images(accelerator, args, epoch + 1, global_step, accelerator.device, vae, tokenizer, text_encoder, unet)
 
+
+            if args.save_every_n_epochs is not None:
+                saving = (epoch + 1) % args.save_every_n_epochs == 0 and (epoch + 1) < num_train_epochs
+                if is_main_process and saving:
+                    #上传模型&样图
+                    model_file_path, sample_image_file_path = upload_model_and_sample_file(args)
+                    model_file_name = model_file_path.split('/')[-1]
+                    sample_image_name = sample_image_file_path.split('/')[-1]
+                    # 同步每轮的最后过程信息一步
+                    wb_client.send_message(ws_message)
+                    sync_data = {
+                        "taskId": args.dabi_task_id,
+                        "totalEpochs": num_train_epochs,
+                        "currentEpoch": epoch + 1,
+                        "stepsPerEpoch": steps_per_epoch,
+                        "model": {
+                            "name": model_file_name,
+                            "oss_path": model_file_path
+                        },
+                        "sample_image":{
+                            "name": sample_image_name,
+                            "oss_path": sample_image_file_path
+                        }
+                    }
+                    sync_process_info_to_dabi(args.dabi_env, sync_data, 0)
             # end of epoch
 
         # metadata["ss_epoch"] = str(num_train_epochs)
@@ -1100,9 +1148,29 @@ class NetworkTrainer:
         if is_main_process:
             ckpt_name = train_util.get_last_ckpt_name(args, "." + args.save_model_as)
             save_model(ckpt_name, network, global_step, num_train_epochs, force_sync_upload=True)
-
+            # 上传模型&样图
+            model_file_path, sample_image_file_path = upload_model_and_sample_file(args)
+            # 同步训练的最后一步过程信息
+            model_file_name = model_file_path.split('/')[-1]
+            sample_image_name = sample_image_file_path.split('/')[-1]
+            wb_client.send_message(ws_message)
+            wb_client.stop()
+            sync_data = {
+                "taskId": args.dabi_task_id,
+                "totalEpochs": num_train_epochs,
+                "currentEpoch": ws_message['currentEpoch'],
+                "stepsPerEpoch": steps_per_epoch,
+                "model": {
+                    "name": model_file_name,
+                    "oss_path": model_file_path
+                },
+                "sampleImage": {
+                    "name": sample_image_name,
+                    "oss_path": sample_image_file_path
+                }
+            }
+            sync_process_info_to_dabi(args.dabi_env, sync_data, 0)
             logger.info("model saved.")
-
 
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()

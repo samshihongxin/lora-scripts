@@ -97,11 +97,12 @@ def dabi_run_train(task_id: str,
             from dabi.util.tasks import DabiTaskStatus
             if result.returncode != 0:
                 log.error(f"Training failed / 训练失败")
-                tasks.dabi_task_manager.set_task_status(task_id, DabiTaskStatus.TRAIN_FAILED)
+                # tasks.dabi_task_manager.set_task_status(task_id, DabiTaskStatus.TRAIN_FAILED)
+                task.status = DabiTaskStatus.TRAIN_FAILED
                 tasks.dabi_task_manager.sync_result_to_dabi(task_id, 1)
             else:
                 log.info(f"Training finished / 训练完成")
-                tasks.dabi_task_manager.upload_model_to_oss(task.task_id)
+                tasks.dabi_task_manager.set_task_status(task_id, DabiTaskStatus.UPLOADED)
         except Exception as e:
             log.error(f"An error occurred when training / 训练出现致命错误: {e}")
 

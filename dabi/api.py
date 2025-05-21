@@ -16,7 +16,7 @@ from mikazuki.app.models import (APIResponseFail, APIResponseSuccess, APIRespons
 from mikazuki.log import log
 from mikazuki.tasks import TaskStatus, tm
 from mikazuki.utils import train_utils
-
+from dabi.util.config_manager import get_dabi_config
 router = APIRouter()
 
 @router.post("/run")
@@ -36,7 +36,8 @@ async def create_toml_file(request: Request):
     if 'dabi_env' not in config:
         return APIResponseFail(message="dabi_env is required")
     dabi_task.config = config
-
+    env_config = get_dabi_config(config["dabi_env"])
+    config["dabi_ws_host"] = f"{env_config['ws_host']}{task_id}"
     train_utils.fix_config_types(config)
     gpu_ids = config.pop("gpu_ids", None)
     suggest_cpu_threads = 8 if len(train_utils.get_total_images(config["train_data_dir"])) > 200 else 2

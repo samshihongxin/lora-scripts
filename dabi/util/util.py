@@ -96,7 +96,7 @@ def upload_sample_image(env, local_file_name, local_file_dir):
 
 def sync_result_to_dabi(env, data, code):
     config = get_dabi_config(env)
-    url = config['host'] + '/lora/train/callbackAfterTrainDone'
+    url = config['host'] + '/lora/train/callback'
     param = {
         'code': code,
         'taskId': data.task_id,
@@ -121,3 +121,64 @@ def copy_local_file(source_file, source_file_dir, target_file, target_file_dir):
         with open(os.path.join(target_file_dir, target_file), 'wb') as t_file:
             t_file.write(s_file.read())
             log.info(f"Copy file success, source file: {os.path.join(source_file_dir, source_file)}, target file: {os.path.join(target_file_dir, target_file)}")
+
+def upload_model_and_sample_file(args):
+    sub_output_dir = args.output_dir
+    output_model_name = args.output_name
+    output_model_extension = args.save_model_as
+    local_model_path = os.path.join(os.getcwd(), sub_output_dir)
+    timestamp = datetime.now().strftime("%Y%m%d")
+    env = args.dabi_env
+    target_file_dir = f"/mnt/train_loras/{env}/{timestamp}"
+    model_file_path = ''
+    if os.path.exists(local_model_path):
+        model_files = [model_file for model_file in os.listdir(local_model_path)
+                       if os.path.isfile(os.path.join(local_model_path, model_file))
+                       and model_file.startswith(output_model_name)
+                       and model_file.endswith(output_model_extension)]
+        if model_files is not None and len(model_files) > 0:
+            model_files.sort()
+            model_file = model_files[0]
+            model_file_path = upload_local_file_to_oss_direct(env,
+                                                            model_file,
+                                                            os.path.join(local_model_path, model_file),
+                                                            timestamp)
+            try:
+                # copy_local_file(model_file, local_model_path, model_file, target_file_dir)
+                # 删除本地模型
+                os.remove(os.path.join(local_model_path, model_file))
+            except  Exception as e:
+                log.error(f"Copy model file to /mnt/train_loras failed, Error fetching : {e}")
+    sample_image_file_path = ''
+    local_sample_image_path = os.path.join(local_model_path, "sample")
+    if os.path.exists(local_sample_image_path):
+        sample_images = [sample_image for sample_image in os.listdir(local_sample_image_path)
+                         if os.path.isfile(os.path.join(local_sample_image_path, sample_image))
+                         and sample_image.startswith(output_model_name)]
+        if sample_images is not None and len(sample_images) > 0:
+            sample_images.sort()
+            sample_image = sample_images[0]
+            sample_image_file_path = upload_sample_image(env,
+                                                sample_image,
+                                                os.path.join(local_sample_image_path, sample_image))
+            try:
+                # copy_local_file(sample_image, local_sample_image_path, sample_image, target_file_dir)
+                # 删除本地样图
+                os.remove(os.path.join(local_sample_image_path, sample_image))
+            except  Exception as e:
+                log.error(f"Copy sample image to /mnt/train_loras failed, Error fetching : {e}")
+    return model_file_path, sample_image_file_path
+
+def sync_process_info_to_dabi(env, data, code):
+    config = get_dabi_config(env)
+    url = config['host'] + '/lora/train/callback'
+    param = data
+    param['code'] = code
+    try:
+        # 只要服务通的就能获取到地址，不会校验文件是否存在
+        response = requests.post(url, json=param, timeout=30)
+        response.raise_for_status()  # 如果请求失败，抛出异常
+        json = response.json()
+        log.info(f"Sync process info to dabi success, param = {data}, result={json}")
+    except Exception as ex:
+        log.error(f"Sync process info to dabi failed, param = {data}")
